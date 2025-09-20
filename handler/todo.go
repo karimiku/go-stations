@@ -48,6 +48,29 @@ func (h *TODOHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err := json.NewEncoder(w).Encode(resp); err != nil {
 			log.Println("encode error:", err)
 		}
+	case http.MethodPut:
+		var req model.UpdateTODORequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid json", http.StatusBadRequest)
+			return
+		}
+
+		if req.ID == 0 || req.Subject == "" {
+			http.Error(w, "ID,Subjectは必須", http.StatusBadRequest)
+			return
+		}
+
+		resp, err := h.Update(r.Context(), &req)
+		if err != nil {
+			http.Error(w, "TODOが存在しません", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			log.Println("encode error:", err)
+		}
 
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -72,8 +95,11 @@ func (h *TODOHandler) Read(ctx context.Context, req *model.ReadTODORequest) (*mo
 
 // Update handles the endpoint that updates the TODO.
 func (h *TODOHandler) Update(ctx context.Context, req *model.UpdateTODORequest) (*model.UpdateTODOResponse, error) {
-	_, _ = h.svc.UpdateTODO(ctx, 0, "", "")
-	return &model.UpdateTODOResponse{}, nil
+	t, err := h.svc.UpdateTODO(ctx, req.ID, req.Subject, req.Description)
+	if err != nil {
+		return nil, err
+	}
+	return &model.UpdateTODOResponse{TODO: *t}, nil
 }
 
 // Delete handles the endpoint that deletes the TODOs.
