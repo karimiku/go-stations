@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/TechBowl-japan/go-stations/model"
 	"github.com/TechBowl-japan/go-stations/service"
@@ -71,6 +72,35 @@ func (h *TODOHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err := json.NewEncoder(w).Encode(resp); err != nil {
 			log.Println("encode error:", err)
 		}
+	case http.MethodGet:
+		q := r.URL.Query()
+
+		req := model.ReadTODORequest{
+			PrevID: 0,
+			Size:   3,
+		}
+
+		if s := q.Get("prev_id"); s != "" {
+			if v, err := strconv.ParseInt(s, 10, 64); err == nil {
+				req.PrevID = v
+			}
+		}
+
+		if s := q.Get("size"); s != "" {
+			if v, err := strconv.ParseInt(s, 10, 64); err == nil {
+				req.Size = v
+			}
+		}
+		resp, err := h.Read(r.Context(), &req)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			log.Println("encode error:", err)
+		}
 
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -89,8 +119,17 @@ func (h *TODOHandler) Create(ctx context.Context, req *model.CreateTODORequest) 
 
 // Read handles the endpoint that reads the TODOs.
 func (h *TODOHandler) Read(ctx context.Context, req *model.ReadTODORequest) (*model.ReadTODOResponse, error) {
-	_, _ = h.svc.ReadTODO(ctx, 0, 0)
-	return &model.ReadTODOResponse{}, nil
+	todos, err := h.svc.ReadTODO(ctx, req.PrevID, req.Size)
+
+	if err != nil {
+		return nil, err
+	}
+	out := make([]model.TODO, 0, len(todos))
+	for _, t := range todos {
+		out = append(out, *t)
+	}
+
+	return &model.ReadTODOResponse{TODOs: out}, nil
 }
 
 // Update handles the endpoint that updates the TODO.
